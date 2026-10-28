@@ -1,0 +1,34 @@
+name: Release
+
+# On every push to main, semantic-release reads the commit messages (feat:, fix:...),
+# picks the next version, updates CHANGELOG.md and the Info.plist versions, then tags and publishes a release.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: semantic-release
+        run: >
+          npx --yes
+          -p semantic-release
+          -p @semantic-release/changelog
+          -p @semantic-release/git
+          -p @semantic-release/exec
+          -p conventional-changelog-conventionalcommits@8
+          semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
