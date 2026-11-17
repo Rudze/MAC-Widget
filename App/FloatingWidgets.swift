@@ -114,7 +114,10 @@ final class FloatingWidgets: ObservableObject {
     private let photos: PhotoLibrary
     private let music: MusicController
     private var panels: [FloatingKind: NSPanel] = [:]
-    private var origins: [String: [Double]]
+    /// Ancien format (coordonnées absolues), lu seulement pour convertir la config existante.
+    private var legacyOrigins: [String: [Double]]
+    private var placements: [String: FloatingPlacement]
+    private var isPlacing = false
     private var observers = Set<AnyCancellable>()
 
     init(battery: BatteryMonitor, github: GitHubSync, appearance: AppearanceStore, photos: PhotoLibrary,
@@ -130,13 +133,16 @@ final class FloatingWidgets: ObservableObject {
         items = FloatingKind.allCases.map { kind in
             saved.first { $0.kind == kind } ?? FloatingItem(kind: kind, size: kind == .clock || kind.photoSlot != nil ? .medium : .small)
         }
-        origins = UserDefaults.standard.dictionary(forKey: "floatingOrigins") as? [String: [Double]] ?? [:]
+        legacyOrigins = UserDefaults.standard.dictionary(forKey: "floatingOrigins") as? [String: [Double]] ?? [:]
+        placements = UserDefaults.standard.data(forKey: "floatingPlacements")
+            .flatMap { try? JSONDecoder().decode([String: FloatingPlacement].self, from: $0) } ?? [:]
     }
 
     func start() {
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.keepOnScreen() }
+            // macOS déplace d'abord les fenêtres lui-même : on replace une fois l'écran stabilisé.
+            .debounce(for: .milliseconds(400), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.apply() }
             .store(in: &observers)
         apply()
     }
@@ -175,9 +181,9 @@ final class FloatingWidgets: ObservableObject {
             panel.contentView = NSHostingView(rootView: root)
         }
 
-        // On garde le coin haut-gauche à sa place quand la taille change.
-        let origin = origins[item.kind.rawValue].map { CGPoint(x: $0[0], y: $0[1]) } ?? defaultTopLeft(item.kind)
-        panel.setFrame(CGRect(x: origin.x, y: origin.y - size.height, width: size.width, height: size.height), display: true)
+        isPlacing = true
+        panel.setFrame(frame(for: item.kind, size: size), display: true)
+        isPlacing = false
         // Lecteur et widgets qui ouvrent une app restent cliquables ; les autres laissent passer les clics.
         panel.ignoresMouseEvents = !editing && item.kind != .music && item.kind.link == nil
         panel.orderFrontRegardless()
@@ -198,29 +204,94 @@ final class FloatingWidgets: ObservableObject {
 
         NotificationCenter.default.publisher(for: NSWindow.didMoveNotification, object: panel)
             .sink { [weak self, weak panel] _ in
-                guard let self, let panel else { return }
-                self.origins[kind.rawValue] = [panel.frame.minX, panel.frame.maxY]
-                UserDefaults.standard.set(self.origins, forKey: "floatingOrigins")
+                // Seuls les déplacements faits à la main comptent, pas ceux de macOS au changement d'écran.
+                guard let self, let panel, self.editing, !self.isPlacing else { return }
+                self.placements[kind.rawValue] = FloatingPlacement(frame: panel.frame)
+                self.savePlacements()
             }
             .store(in: &observers)
         return panel
     }
 
-    /// Placement initial : empilés en colonne en haut à droite de l'écran principal, sans chevauchement.
-    private func defaultTopLeft(_ kind: FloatingKind) -> CGPoint {
-        let screen = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
+    // MARK: Placement
+
+    /// Position du widget : en % de son écran s'il est branché, sinon de l'écran principal,
+    /// toujours ramenée entièrement dans la zone visible (hors barre des menus et Dock).
+    private func frame(for kind: FloatingKind, size: CGSize) -> CGRect {
+        let screens = NSScreen.screens
+        var topLeft: CGPoint
+        var screen: NSScreen?
+        if let placement = placements[kind.rawValue] {
+            screen = screens.first { $0.displayID == placement.display } ?? screens.first
+            topLeft = placement.topLeft(in: screen?.visibleFrame ?? .zero)
+        } else if let legacy = legacyOrigins[kind.rawValue], legacy.count == 2 {
+            topLeft = CGPoint(x: legacy[0], y: legacy[1])
+            screen = screens.first { $0.frame.insetBy(dx: -2, dy: -2).contains(topLeft) }
+            if let screen {
+                // Conversion unique de l'ancienne position, sur l'écran où elle se trouve.
+                placements[kind.rawValue] = FloatingPlacement(topLeft: topLeft, screen: screen)
+                savePlacements()
+            } else {
+                screen = screens.first
+            }
+        } else {
+            screen = NSScreen.main ?? screens.first
+            topLeft = defaultTopLeft(kind, in: screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900))
+        }
+        guard let visible = screen?.visibleFrame else {
+            return CGRect(x: topLeft.x, y: topLeft.y - size.height, width: size.width, height: size.height)
+        }
+        let x = min(max(topLeft.x, visible.minX), visible.maxX - size.width)
+        let top = min(max(topLeft.y, visible.minY + size.height), visible.maxY)
+        return CGRect(x: x, y: top - size.height, width: size.width, height: size.height)
+    }
+
+    private func savePlacements() {
+        if let data = try? JSONEncoder().encode(placements) { UserDefaults.standard.set(data, forKey: "floatingPlacements") }
+    }
+
+    /// Placement initial : empilés en colonne en haut à droite de l'écran, sans chevauchement.
+    private func defaultTopLeft(_ kind: FloatingKind, in screen: CGRect) -> CGPoint {
         let above = items.prefix { $0.kind != kind }.filter(\.enabled)
         let offset = above.reduce(CGFloat(0)) { $0 + $1.size.size.height + 16 }
         return CGPoint(x: screen.maxX - 384, y: screen.maxY - 20 - offset)
     }
+}
 
-    private func keepOnScreen() {
-        let screens = NSScreen.screens.map(\.visibleFrame)
-        for (kind, panel) in panels where !screens.contains(where: { $0.intersects(panel.frame) }) {
-            origins[kind.rawValue] = nil
-            if let item = items.first(where: { $0.kind == kind }) { show(item) }
-        }
+/// Coin haut-gauche d'un widget flottant, en fraction de la zone visible de son écran
+/// (0 = bord gauche / haut, 1 = bord droit / bas) : il garde sa place relative d'un écran à l'autre.
+struct FloatingPlacement: Codable {
+    var display: UInt32
+    var x: Double
+    var y: Double
+
+    init(topLeft: CGPoint, screen: NSScreen) {
+        let visible = screen.visibleFrame
+        display = screen.displayID
+        x = min(max((topLeft.x - visible.minX) / max(visible.width, 1), 0), 1)
+        y = min(max((visible.maxY - topLeft.y) / max(visible.height, 1), 0), 1)
     }
+
+    init(frame: CGRect) {
+        let center = CGPoint(x: frame.midX, y: frame.midY)
+        let screen = NSScreen.screens.first { $0.frame.contains(center) }
+            ?? NSScreen.screens.max { $0.frame.intersection(frame).area < $1.frame.intersection(frame).area }
+        self.init(topLeft: CGPoint(x: frame.minX, y: frame.maxY), screen: screen ?? NSScreen.main!)
+    }
+
+    func topLeft(in visible: CGRect) -> CGPoint {
+        CGPoint(x: visible.minX + x * visible.width, y: visible.maxY - y * visible.height)
+    }
+}
+
+private extension NSScreen {
+    var displayID: UInt32 {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0
+    }
+}
+
+private extension CGRect {
+    var area: CGFloat { isNull ? 0 : width * height }
 }
 
 /// Données des widgets flottants, rafraîchies une fois par minute, calée sur le changement de minute.
