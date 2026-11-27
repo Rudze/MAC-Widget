@@ -47,7 +47,7 @@ The app only wakes up on **system events** (power, Bluetooth, calendar changes),
 ## Project Structure
 
 ```text
-MAC-Widget/
+APP-MAC-Widget/
 ├── App/            # Menu-bar app: data, floating widgets, wallpaper, settings
 ├── Widgets/        # WidgetKit extension (sandboxed, read-only)
 ├── Shared/         # Models and paths shared by the app and the widgets
@@ -68,8 +68,8 @@ MAC-Widget/
 ### Setup
 
 ```bash
-git clone https://github.com/Rudze/MAC-Widget
-cd MAC-Widget
+git clone https://github.com/Rudze/APP-MAC-Widget
+cd APP-MAC-Widget
 ./build.sh
 ```
 
