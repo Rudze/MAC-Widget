@@ -12,10 +12,10 @@ MacWidget
 
 <div align="center">
 
-[![forthebadge](https://forthebadge.com/images/badges/built-with-love.svg)](https://forthebadge.com) &nbsp;
-[![forthebadge](https://forthebadge.com/images/badges/open-source.svg)](https://forthebadge.com) &nbsp;
-[![Swift](https://img.shields.io/badge/Swift-F05138?style=for-the-badge&logo=swift&logoColor=white)](https://www.swift.org) &nbsp;
-[![macOS](https://img.shields.io/badge/macOS_14+-000000?style=for-the-badge&logo=apple&logoColor=white)](https://www.apple.com/macos)
+<a href="https://forthebadge.com"><img alt="Built with love" src="https://forthebadge.com/images/badges/built-with-love.svg" height="35" /></a> &nbsp;
+<a href="https://forthebadge.com"><img alt="Open source" src="https://forthebadge.com/images/badges/open-source.svg" height="35" /></a> &nbsp;
+<a href="https://www.swift.org"><img alt="Swift" src="https://img.shields.io/badge/Swift-F05138?style=for-the-badge&logo=swift&logoColor=white" height="35" /></a> &nbsp;
+<a href="https://www.apple.com/macos"><img alt="macOS 14+" src="https://img.shields.io/badge/macOS_14+-000000?style=for-the-badge&logo=apple&logoColor=white" height="35" /></a>
 
 </div>
 
