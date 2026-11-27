@@ -1,3 +1,9 @@
+## [0.1.2](https://github.com/Rudze/MAC-Widget/compare/v0.1.1...v0.1.2) (2026-11-27)
+
+### Bug Fixes
+
+* show the album artwork in the music widget for streamed Apple Music tracks ([8a8b985](https://github.com/Rudze/MAC-Widget/commit/8a8b98566ecf7ef11f4abbba0199299c0bb73b27))
+
 ## [0.1.1](https://github.com/Rudze/MAC-Widget/compare/v0.1.0...v0.1.1) (2026-11-17)
 
 ### Bug Fixes
