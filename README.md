@@ -1,55 +1,90 @@
-# MacWidget
+<h2 align="center">
+MacWidget
+</h2>
 
-App de barre des menus ultra légère + widgets natifs macOS (WidgetKit), tout en blanc.
+---
 
-| Widget | Tailles | Source |
-|---|---|---|
-| Horloge | S M L XL | sans fond, police / épaisseur / couleur façon écran verrouillé iPhone |
-| Ressources | S M L | processeur, mémoire, stockage, batterie, température (relevé par l'extension ~5 min) |
-| GitHub | S M L | graphe de contributions + derniers commits (jeton facultatif dans le trousseau) |
-| Batteries | S M L | Mac (IOKit), Magic Keyboard/Mouse/Trackpad (IORegistry), AirPods/casques (IOBluetooth, repli `system_profiler`) |
-| Calendrier | S M L | EventKit, 14 jours, sélection des calendriers |
-| Cadre photo 1–3 | S M L XL | photos recadrées par taille, diaporama, fond réglable derrière les PNG transparents |
+<div align="center">
+<img alt="MacWidget banner" src="./assets_readme/images/background.png" />
+</div>
 
-Plus un **fond d'écran** : image fixe (JPG, PNG, HEIC… appliquée par macOS lui-même), vidéo (MP4/MOV/HEVC) ou image animée (GIF/WebP/APNG convertie une fois en H.264).
+<br/>
 
-## Compiler / installer
+<div align="center">
 
-Pas besoin de Xcode, les Command Line Tools suffisent :
+[![forthebadge](https://forthebadge.com/images/badges/built-with-love.svg)](https://forthebadge.com) &nbsp;
+[![forthebadge](https://forthebadge.com/images/badges/open-source.svg)](https://forthebadge.com) &nbsp;
+[![Swift](https://img.shields.io/badge/Swift-F05138?style=for-the-badge&logo=swift&logoColor=white)](https://www.swift.org) &nbsp;
+[![macOS](https://img.shields.io/badge/macOS_14+-000000?style=for-the-badge&logo=apple&logoColor=white)](https://www.apple.com/macos)
+
+</div>
+
+---
+
+## About the Project
+
+This project is a **light menu-bar app** that adds **custom white widgets** to the macOS widget gallery.
+
+The main goal is to get clean, **customizable widgets** on the desktop while using **almost no CPU or memory**.
+
+The app only wakes up on **system events** (power, Bluetooth, calendar changes), and widgets just display data it prepares in advance.
+
+---
+
+## Features
+
+* ✅ **Big digital clock** with lock-screen style typography: font, weight, color, no background
+* ✅ **Batteries** of the Mac, Magic accessories and AirPods, in **white** instead of green
+* ✅ **Calendar** and **Mac resources** (CPU, memory, disk, thermal), one click opens Calendar or Activity Monitor
+* ✅ **GitHub** contributions graph and latest commits
+* ✅ **Apple Music** now playing, with album artwork and controls
+* ✅ **Photo frames** with free cropping and a fill color behind transparent PNGs
+* ✅ **Floating widgets** with truly **transparent** backgrounds, kept in place when the screen changes
+* ✅ **Wallpapers**: still images, videos and **animated GIF / WebP / APNG**, paused when hidden
+
+---
+
+## Project Structure
+
+```text
+MAC-Widget/
+├── App/            # Menu-bar app: data, floating widgets, wallpaper, settings
+├── Widgets/        # WidgetKit extension (sandboxed, read-only)
+├── Shared/         # Models and paths shared by the app and the widgets
+├── Resources/      # Info.plist and entitlements
+├── tools/          # Icon generator and local signing identity
+└── build.sh        # Builds, signs and installs the app
+```
+
+---
+
+## Installation
+
+### Requirements
+
+* **macOS 14** or later
+* **Command Line Tools** with **Swift 6** (no Xcode needed)
+
+### Setup
 
 ```bash
-./build.sh               # compile, signe (certificat local), installe dans /Applications, lance
-./build.sh --no-install  # juste le bundle, dans ~/Library/Caches/MacWidget-build
-SIGN_IDENTITY="Apple Development: toi@… (TEAMID)" ./build.sh   # signature avec ton identifiant Apple
+git clone https://github.com/Rudze/MAC-Widget
+cd MAC-Widget
+./build.sh
 ```
 
-Par défaut, `tools/signing-identity.sh` crée une fois un certificat local auto-signé dans un trousseau dédié
-(`~/Library/Application Support/MacWidget-Signing`). La signature reste identique d'un build à l'autre,
-donc les autorisations macOS (calendrier, Bluetooth) sont conservées. Le bundle est assemblé dans
-`~/Library/Caches/MacWidget-build` car la synchro iCloud de Documents ajoute des attributs que codesign refuse.
+The app is installed in **/Applications** and starts in the **menu bar**.
 
-Ajouter un widget : clic droit sur le bureau → **Modifier les widgets…** → **MacWidget**.
+To add a widget: right-click the desktop → **Edit Widgets…** → **MacWidget**.
 
-## Pourquoi c'est léger
+---
 
-- L'app (agent sans Dock) ne tourne que sur notifications : changement de source d'alimentation,
-  connexion Bluetooth, modification du calendrier. Timer de secours toutes les 2 min (tolérance 30 s).
-- Rechargement des widgets limité (budget WidgetKit) : immédiat seulement si un appareil apparaît
-  ou change d'état de charge.
-- Les photos sont pré-rendues en petits JPEG à la taille exacte du widget : l'extension ne fait que les afficher.
-- Fond animé : un seul `AVPlayer` partagé par tous les écrans, décodage par la puce média,
-  pause automatique si le bureau est recouvert, écran en veille / verrouillé, mode économie d'énergie
-  (et en option sur batterie). La fenêtre de réglages est détruite à la fermeture.
+## Contact
 
-## Architecture
+If you have any questions, feel free to reach out at contact@rudydavid.fr
 
-```
-App/        agent barre des menus (non sandboxé) : collecte + fond animé + réglages SwiftUI
-Widgets/    extension WidgetKit (sandboxée, lecture seule de ~/Library/Application Support/MacWidget)
-Shared/     modèles, chemins partagés, lecture batterie du Mac
-```
+---
 
-Note : le SDK macOS 27 transforme `@State` en macro dont le plugin n'est livré qu'avec Xcode ;
-`build.sh` utilise donc le SDK 26.x des Command Line Tools s'il est présent.
+### Show Your Support
 
-Limite : l'iPhone, l'iPad et l'Apple Watch ne partagent leur batterie qu'avec les widgets d'Apple (API privée).
+Give a ⭐ if you like this project!
