@@ -69,6 +69,7 @@ final class MusicController: ObservableObject {
         if trackID != artworkTrackID {
             artworkTrackID = trackID
             info.artworkFile = saveArtwork(trackID: trackID)
+            if info.artworkFile == nil { fetchArtwork(for: info, trackID: trackID) }
         }
         publish(info)
     }
@@ -83,19 +84,53 @@ final class MusicController: ObservableObject {
         if changed { WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.music) }
     }
 
-    /// Pochette réduite à 600 px, nom unique par morceau pour que le widget ne garde pas l'ancienne.
+    /// Pochette fournie par Musique. Les morceaux écoutés en streaming n'en donnent souvent aucune.
     private func saveArtwork(trackID: String) -> String? {
-        let folder = SharedStore.directory.appendingPathComponent("Music", isDirectory: true)
-        try? FileManager.default.removeItem(at: folder)
-        guard let data = Self.run("tell application \"Music\" to get raw data of artwork 1 of current track")?.data,
-              let source = CGImageSourceCreateWithData(data as CFData, nil),
+        try? FileManager.default.removeItem(at: Self.artworkFolder)
+        for property in ["raw data", "data"] {
+            if let data = Self.run("tell application \"Music\" to get \(property) of artwork 1 of current track")?.data,
+               let path = Self.writeArtwork(data, trackID: trackID) {
+                return path
+            }
+        }
+        return nil
+    }
+
+    /// Repli pour le streaming : la pochette de l'album dans le catalogue public d'Apple (iTunes Search).
+    private func fetchArtwork(for info: NowPlaying, trackID: String) {
+        var query = URLComponents(string: "https://itunes.apple.com/search")!
+        query.queryItems = [
+            URLQueryItem(name: "term", value: "\(info.artist) \(info.album.isEmpty ? info.title : info.album)"),
+            URLQueryItem(name: "entity", value: info.album.isEmpty ? "song" : "album"),
+            URLQueryItem(name: "limit", value: "1"),
+        ]
+        guard let url = query.url else { return }
+        Task { [weak self] in
+            guard let (json, _) = try? await URLSession.shared.data(from: url),
+                  let result = (try? JSONSerialization.jsonObject(with: json) as? [String: Any])?["results"] as? [[String: Any]],
+                  let small = result.first?["artworkUrl100"] as? String,
+                  let large = URL(string: small.replacingOccurrences(of: "100x100bb", with: "600x600bb")),
+                  let (data, _) = try? await URLSession.shared.data(from: large),
+                  let self, self.artworkTrackID == trackID, var current = self.nowPlaying,
+                  let path = Self.writeArtwork(data, trackID: trackID)
+            else { return }
+            current.artworkFile = path
+            self.publish(current)
+        }
+    }
+
+    private static var artworkFolder: URL { SharedStore.directory.appendingPathComponent("Music", isDirectory: true) }
+
+    /// Pochette réduite à 600 px, nom unique par morceau pour que le widget ne garde pas l'ancienne.
+    private static func writeArtwork(_ data: Data, trackID: String) -> String? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                   kCGImageSourceCreateThumbnailFromImageAlways: true,
                   kCGImageSourceThumbnailMaxPixelSize: 600,
               ] as CFDictionary)
         else { return nil }
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let url = folder.appendingPathComponent("\(trackID.isEmpty ? UUID().uuidString : trackID).jpg")
+        try? FileManager.default.createDirectory(at: artworkFolder, withIntermediateDirectories: true)
+        let url = artworkFolder.appendingPathComponent("\(trackID.isEmpty ? UUID().uuidString : trackID).jpg")
         guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
         CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
         return CGImageDestinationFinalize(dest) ? url.path : nil
